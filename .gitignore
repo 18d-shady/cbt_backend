@@ -1,0 +1,28 @@
+# Python
+*.pyc
+*.pyo
+__pycache__/
+
+# Django
+*.log
+*.pot
+*.py[cod]
+db.sqlite3
+/media
+
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# Environment variables and settings
+.env
+*.env
+
+# Files from Django migrations
+migrations/
+
+# Temporary files
+*.bak
+*.swp
