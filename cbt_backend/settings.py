@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,10 +22,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-t6tp0uys3x_4j72$5x8@64a%^(kly+v9%1=b@z_4o&ol1s6+02'
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
@@ -86,6 +89,14 @@ DATABASES = {
 """
 
 DATABASES = {
+    'default': dj_database_url.config(
+        default='sqlite:///db.sqlite3',
+        conn_max_age=600
+    )
+}
+
+"""
+DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'cbt_db',
@@ -95,7 +106,7 @@ DATABASES = {
         'PORT': '5432',
     }
 }
-
+"""
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -153,4 +164,5 @@ email="admin@example.com",    password="winston1")
 student username=dav101, password winston12
 
 exam coursecode: mth101
+postgresql://exam_officer:odcHGuE9fyuGMfF8weCxqz6W8RqM1Ts7@dpg-d4vuaj9r0fns739tblj0-a/cbt_db_iwxd
 """

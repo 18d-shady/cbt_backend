@@ -80,3 +80,16 @@ class StudentScore(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.exam.course_code}: {self.score}"
+
+"""
+def school_icon_path(instance, filename):
+    ext = filename.split('.')[-1]
+    return f'school_{instance.id}/icon.{ext}'
+
+class School(models.Model):
+    name = models.CharField(max_length=255)
+    color = models.CharField(max_length=10)
+    icon = models.ImageField(upload_to=school_icon_path, null=True, blank=True)
+    def __str__(self):
+        return f"{self.name} ({self.id})"
+"""    

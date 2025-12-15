@@ -1,0 +1,1 @@
+web: gunicorn cbt_backend.wsgi:application
