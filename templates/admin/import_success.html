@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="padding: 20px;">
+    <h2>Successfully Imported {{ count }} Students</h2>
+    <p><strong>IMPORTANT:</strong> This is the only time you will see these passwords. Please print this page or copy the data now.</p>
+    
+    <div class="submit-row">
+        <a href="../download-bulk-slips/" class="button" style="background: #0D7313; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+            Download All Slips as PDF
+        </a>
+        <button type="button" onclick="window.print()" class="button">Print Page</button>
+        <a href="../" class="button" style="margin-left: 10px;">Return to User List</a>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
+        <thead>
+            <tr style="background: #f8f8f8; border-bottom: 2px solid #ccc;">
+                <th style="padding: 10px; text-align: left;">Student Name</th>
+                <th style="padding: 10px; text-align: left;">Username</th>
+                <th style="padding: 10px; text-align: left;">Password</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">{{ student.name }}</td>
+                <td style="padding: 10px;"><code>{{ student.username }}</code></td>
+                <td style="padding: 10px;"><code>{{ student.password }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+    @media print {
+        /* Hide the admin sidebar and header when printing slips */
+        #header, .breadcrumbs, .submit-row, #nav-sidebar {
+            display: none !important;
+        }
+        #content {
+            margin: 0 !important;
+        }
+        table {
+            border: 1px solid #000;
+        }
+    }
+</style>
+{% endblock %}

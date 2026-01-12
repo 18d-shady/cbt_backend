@@ -1,0 +1,58 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="/admin/cbt/exam/">Exams</a>
+    &rsaquo; Import Questions
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module" style="padding: 20px; background: #fff; border-radius: 4px;">
+        <h2>Upload Completed Word Template</h2>
+        <p>Please upload the <strong>.docx</strong> file you previously downloaded and edited.</p>
+        
+        <form action="" method="POST" enctype="multipart/form-data" id="upload-form">
+            {% csrf_token %}
+            
+            <div style="border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; border-radius: 8px; background: #f9f9f9;" id="drop-zone">
+                <input type="file" name="word_file" id="id_word_file" accept=".docx" required style="display: none;">
+                <label for="id_word_file" style="cursor: pointer;">
+                    <img src="https://img.icons8.com/color/48/000000/microsoft-word-2019.png" alt="Word Icon"><br>
+                    <strong id="file-label">Click to select or drag and drop your Word file here</strong>
+                </label>
+            </div>
+
+            <div class="submit-row" style="margin: 0; padding: 0; background: none; border: none; text-align: left;">
+                <input type="submit" value="Process Questions" class="default" style="float: none; height: 40px; width: 180px;">
+                <a href="../" class="closelink" style="margin-left: 15px; vertical-align: middle;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('id_word_file');
+    const fileLabel = document.getElementById('file-label');
+    const dropZone = document.getElementById('drop-zone');
+
+    fileInput.addEventListener('change', (e) => {
+        if (fileInput.files.length > 0) {
+            fileLabel.innerText = "Selected: " + fileInput.files[0].name;
+            dropZone.style.borderColor = "#417690";
+            dropZone.style.background = "#eef";
+        }
+    });
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = "#417690"; });
+    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = "#ccc"; });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileInput.files = e.dataTransfer.files;
+        fileLabel.innerText = "Ready to upload: " + fileInput.files[0].name;
+    });
+</script>
+{% endblock %}

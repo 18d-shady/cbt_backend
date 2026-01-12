@@ -8,10 +8,13 @@ urlpatterns = [
 
     path("api/login/", StudentLoginView.as_view(), name="student-login"),
     path("api/subjects/", SubjectRegisteredView.as_view(), name="subjects-registered"),
-    path("api/exam/<str:course_code>/", ExamDetailView.as_view(), name="exam-detail"),
-    path("api/exam/<str:course_code>/question/<int:index>/", QuestionByIndexView.as_view(), name="question-by-index"),
+    path("api/exam/<int:exam_id>/", ExamDetailView.as_view(), name="exam-detail"),
+    path("api/exam/<int:exam_id>/question/<int:index>/", QuestionByIndexView.as_view(), name="question-by-index"),
     path("api/answer/", SaveAnswerView.as_view(), name="save-answer"),
-    path("api/exam/<str:course_code>/start/", StartExamSessionView.as_view(), name="start-session"),
-    path("api/exam/<str:course_code>/time/", RemainingTimeView.as_view(), name="remaining-time"),
-    path("api/exam/<str:course_code>/end/", EndExamSessionView.as_view(), name="end-session"),
+    path("api/exam/<int:exam_id>/start/", StartExamSessionView.as_view(), name="start-session"),
+    path("api/exam/<int:exam_id>/time/", RemainingTimeView.as_view(), name="remaining-time"),
+    path("api/exam/<int:exam_id>/end/", EndExamSessionView.as_view(), name="end-session"),
+
+    path("api/demo/", DemoRequestView.as_view(), name="demo-request"),
+    path("api/verify-payment/", paystack_webhook, name="verify-payment"),
 ]

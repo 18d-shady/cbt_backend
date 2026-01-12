@@ -22,11 +22,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY')
+SECRET_KEY = "django-insecure-t6tp0uys3x_4j72$5x8@64a%^(kly+v9%1=b@z_4o&ol1s6+02"
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
@@ -34,6 +34,10 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    #'jazzmin',
+    "unfold",  # Must be BEFORE django.contrib.admin
+    "unfold.contrib.filters",
+    "unfold.contrib.forms",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -55,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'cbt.middleware.SubscriptionMiddleware',
 ]
 
 ROOT_URLCONF = 'cbt_backend.urls'
@@ -62,7 +67,7 @@ ROOT_URLCONF = 'cbt_backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -86,9 +91,8 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-"""
 
-DATABASES = {
+DATABASES = { 
     'default': dj_database_url.config(
         default='sqlite:///db.sqlite3',
         conn_max_age=600
@@ -96,6 +100,7 @@ DATABASES = {
 }
 
 """
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -106,7 +111,6 @@ DATABASES = {
         'PORT': '5432',
     }
 }
-"""
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -132,7 +136,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+#TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Lagos'
 
 USE_I18N = True
 
@@ -143,6 +148,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -157,12 +165,68 @@ REST_FRAMEWORK = {
     ),
 }
 
+
+PAYSTACK_SECRET_KEY = "sk_test_xxxx"
+ADMIN_EMAIL = "olehidavis@gmail.com"
+DEFAULT_FROM_EMAIL = "noreply@justcbt.com"
+
+
+UNFOLD = {
+    "SITE_TITLE": "JustCBT",
+    "SITE_HEADER": "JustCBT Portal",
+    "SITE_SYMBOL": "JC",
+    # We leave colors out of here so our CSS override takes over
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+    },
+    "COLORS": {
+        "primary": {
+            "50": "236 253 245",
+            "100": "209 250 229",
+            "200": "167 243 208",
+            "300": "110 231 183",
+            "400": "52 211 153",
+            "500": "16 185 129",
+            "600": "5 150 105", # This is the main Green (Replace with your Hex converted to RGB if needed)
+            "700": "4 120 87",
+            "800": "6 95 70",
+            "900": "4 78 56",
+            "950": "2 44 34",
+        },
+    },
+}
+
+
 """
 superadmin = User.objects.create_superuser( username="admin001", 
 email="admin@example.com",    password="winston1")
 
-student username=dav101, password winston12
 
-exam coursecode: mth101
+
+myschool admin: my-school_admin , password winston2
+
+from django.contrib.auth.models import User
+from cbt.models import UserProfile
+
+# Get your new admin
+user = User.objects.get(username='admin')
+
+# Create the profile (Leave school null for now if you haven't created one yet)
+UserProfile.objects.create(
+    user=user,
+    role='superadmin',
+    school=None 
+)
+
+Recommendation for Admins
+Since images in Word can be tricky (sometimes they are floating or behind text), tell your admins to:
+
+Use "In Line with Text" as the wrapping style for images.
+
+Place the image directly below the [[[% Q %]]] tag.
+
 postgresql://exam_officer:odcHGuE9fyuGMfF8weCxqz6W8RqM1Ts7@dpg-d4vuaj9r0fns739tblj0-a/cbt_db_iwxd
+https://cbt-backend-6tdk.onrender.com
+https://cbt-frontend-taupe.vercel.app/
 """

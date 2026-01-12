@@ -1,106 +1,78 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import CourseRegistration, Exam, Question, StudentAnswer, ExamSession, StudentScore
+from .models import (
+    School, Question, Exam, CourseRegistration, 
+    StudentAnswer, ExamSession, StudentScore, QuestionImage
+)
 
+class SchoolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = School
+        fields = ["id", "name", "color", "icon", "school_type"]
 
 class UserSerializer(serializers.ModelSerializer):
+    school = serializers.CharField(source='userprofile.school.name', read_only=True)
+    role = serializers.CharField(source='userprofile.role', read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name"]
-
+        fields = ["id", "username", "email", "first_name", "last_name", "school", "role"]
 
 class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            "id",
-            "exam",
-            "question_number",
-            "question_text",
-            "option_a",
-            "option_b",
-            "option_c",
-            "option_d",
-            "correct_option",
+            "id", "exam", "question_number", "question_text", "question_type",
+            "option_a", "option_b", "option_c", "option_d", "correct_answer"
         ]
 
-
 class ExamSerializer(serializers.ModelSerializer):
-    # include nested questions if needed
-    questions = QuestionSerializer(many=True, read_only=True)
-
+    school = SchoolSerializer(read_only=True)
+    course_name = serializers.ReadOnlyField(source='course.name')
+    # Dynamic field: shows Class Name + Group
+    class_name = serializers.SerializerMethodField()
+    
     class Meta:
         model = Exam
         fields = [
-            "id",
-            "course_code",
-            "course_title",
-            "total_questions",
-            "duration_minutes",
-            "rules",
-            "questions",
+            "id", "school", "course_name", "class_name", "title",
+            "total_questions", "duration_minutes", "rules"
         ]
 
-class CourseRegistrationSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    exam = ExamSerializer(read_only=True)
-    exam_id = serializers.PrimaryKeyRelatedField(
-        queryset=Exam.objects.all(), write_only=True, source="exam"
-    )
-
-    class Meta:
-        model = CourseRegistration
-        fields = ["id", "user", "exam", "exam_id", "registered_on"]
-
-class StudentAnswerSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    question = QuestionSerializer(read_only=True)
-
-    class Meta:
-        model = StudentAnswer
-        fields = ["id", "user", "question", "selected_option", "is_correct"]
-
+    def get_class_name(self, obj):
+        # Access the class via the course relationship
+        target = obj.course.target_class
+        if target:
+            return f"{target.name} {target.group or ''}".strip()
+        return "General"
 
 class ExamSessionSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    exam = ExamSerializer(read_only=True)
-
+    # Adding extra info so the frontend knows exactly when the clock stops
     class Meta:
         model = ExamSession
         fields = ["id", "user", "exam", "start_time", "end_time"]
-
-
-class StudentScoreSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    exam = ExamSerializer(read_only=True)
-
+        
+class StudentAnswerSerializer(serializers.ModelSerializer):
     class Meta:
-        model = StudentScore
-        fields = ["id", "user", "exam", "score"]
-
+        model = StudentAnswer
+        fields = ["id", "user", "question", "answer_text", "is_correct", "is_graded", "points_earned"]
 
 class QuestionWithAnswerSerializer(serializers.ModelSerializer):
     student_answer = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
         fields = [
-            "id",
-            "question_number",
-            "question_text",
-            "option_a",
-            "option_b",
-            "option_c",
-            "option_d",
-            "student_answer",
+            "id", "question_number", "question_text", "question_type",
+            "option_a", "option_b", "option_c", "option_d",
+            "student_answer", "images"
         ]
 
     def get_student_answer(self, obj):
         user = self.context.get("request").user
-        if not user or user.is_anonymous:
-            return None
-        try:
-            ans = StudentAnswer.objects.get(user=user, question=obj)
-            return ans.selected_option
-        except StudentAnswer.DoesNotExist:
-            return None
+        ans = StudentAnswer.objects.filter(user=user, question=obj).first()
+        return ans.answer_text if ans else None
+
+    def get_images(self, obj):
+        return [{"image": img.image.url, "caption": img.caption} for img in obj.images.all()]

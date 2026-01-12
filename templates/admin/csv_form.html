@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+    <form action="" method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="module">
+            <table style="width: 100%;">
+                <caption><a href="#" class="section">Upload Student CSV</a></caption>
+                <tr class="row1">
+                    <td style="padding: 20px;">
+                        <div style="margin-bottom: 20px; background: #e1f5fe; padding: 10px; border-radius: 4px;">
+                            <strong>💡 Need a template?</strong> 
+                            <a href="../download-sample/" style="font-weight: bold; color: #0D7313; text-decoration: underline;">
+                                Click here to download the sample Excel (CSV) sheet
+                            </a>
+                        </div>
+                        <p>Please select a <strong>.csv</strong> file containing student data.</p>
+                        <p style="color: #666; font-size: 0.9em;">
+                            Expected Columns: <em>first_name, middle_name, last_name, password</em>
+                        </p>
+                        <input type="file" name="csv_file" accept=".csv" required style="margin: 15px 0;">
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="submit-row">
+            <input type="submit" value="Upload and Process" class="default" name="_save">
+            <a href="../" class="closelink">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

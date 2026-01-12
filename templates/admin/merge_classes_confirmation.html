@@ -1,0 +1,48 @@
+{% extends "unfold/layouts/base.html" %}
+{% load l10n %}
+
+{% block content %}
+<div class="container mx-auto p-6">
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6 dark:bg-gray-800 dark:border-gray-700">
+        <h2 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Confirm Class Merge</h2>
+        
+        <p class="mb-4 text-gray-600 dark:text-gray-400">
+            Are you sure you want to merge the following classes?
+        </p>
+        
+        <ul class="list-disc ml-5 mb-6 text-gray-700 dark:text-gray-300">
+            {% for class in items %}
+                <li><strong>{{ class.name }}</strong> (Students: {{ class.userprofile_set.count }})</li>
+            {% endfor %}
+        </ul>
+
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    New/Primary Class Name
+                </label>
+                <input type="text" name="master_name" required 
+                       class="w-full max-w-md px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                       placeholder="Enter new class name...">
+                <p class="mt-1 text-xs text-gray-500">All selected classes will be renamed to this and merged.</p>
+            </div>
+
+            {% for obj in items %}
+                <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}" />
+            {% endfor %}
+            
+            <input type="hidden" name="action" value="merge_classes_action" />
+            <input type="hidden" name="apply" value="True" />
+
+            <div class="flex items-center space-x-4">
+                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded font-semibold hover:bg-red-700 transition">
+                    Confirm Merge
+                </button>
+                <a href="." class="text-gray-600 hover:underline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

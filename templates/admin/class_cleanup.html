@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h2>Potential Duplicate Classes Identified</h2>
+<p>The following groups of classes look like duplicates based on their names. You can merge them into the first item in each list.</p>
+
+{% if duplicates %}
+    {% for key, classes in duplicates.items %}
+    <div style="border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background: #f9f9f9;">
+        <strong>Normalized Group: {{ key|upper }}</strong>
+        <ul>
+            {% for cls in classes %}
+                <li>{{ cls.name }} ({{ cls.userprofile_set.count }} students)</li>
+            {% endfor %}
+        </ul>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="group_key" value="{{ key }}">
+            <input type="submit" value="Auto-Merge these into {{ classes.0.name }}" 
+                   style="background: #417690; color: white; border: none; padding: 5px 10px; cursor: pointer;">
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+    <p style="color: green;">✔ No duplicate class names found! Everything looks clean.</p>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href=".." class="button">Back to Class List</a>
+</div>
+{% endblock %}

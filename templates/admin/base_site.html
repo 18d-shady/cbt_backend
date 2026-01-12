@@ -1,0 +1,59 @@
+{% extends "unfold/layouts/base.html" %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+    /* Fixed styles that don't need dynamic logic */
+    .school-subtitle {
+        font-size: 7.5px !important; 
+        font-weight: 900 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        line-height: 1;
+        max-width: 130px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+        margin-top: 2px;
+    }
+
+    .brand-logo-box {
+        height: 24px; 
+        width: 24px; 
+        object-fit: contain;
+        background: white;
+        border-radius: 6px;
+        padding: 2px;
+        border: 1px solid #f1f5f9;
+    }
+</style>
+{% endblock %}
+
+{% block branding %}
+{# We set the color variable here in a standard HTML attribute to avoid CSS parsing errors #}
+<div class="flex items-center gap-2.5 py-1" 
+     style="--dynamic-color: {% if user.userprofile.school.color %}{{ user.userprofile.school.color }}{% else %}#0D7313{% endif %};">
+    
+    {% if user.userprofile.school.icon %}
+        <img src="{{ user.userprofile.school.icon.url }}" 
+             style="width: 34px !important; height: 34px !important; min-width: 28px; border-radius: 4px; object-fit: contain; background: white; padding: 2px; border: 1px solid #f1f5f9;">
+    {% else %}
+        <div style="width: 34px !important; height: 34px !important; background: #f1f5f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #94a3b8;">
+            JC
+        </div>
+    {% endif %}
+
+    <div class="flex flex-col justify-center border-l border-slate-200 pl-2.5 text-sm">
+        <span class="text-xs font-black text-slate-800 leading-none tracking-tighter">
+            Just<span style="color: var(--dynamic-color);">CBT</span>
+        </span>
+        
+        {% if user.userprofile.school.name %}
+            <span class="school-subtitle" style="color: var(--dynamic-color) !important;">
+                {{ user.userprofile.school.name }}
+            </span>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
