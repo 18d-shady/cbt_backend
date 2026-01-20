@@ -47,12 +47,16 @@ def create_school_admin(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=UserProfile)
 def delete_associated_user(sender, instance, **kwargs):
     if instance.user:
-        instance.user.delete()
-
+        try:
+            instance.user.delete()
+        except User.DoesNotExist:
+            pass
+"""
 @receiver(post_delete, sender=User)
 def delete_user_profile(sender, instance, **kwargs):
     if hasattr(instance, 'userprofile'):
         instance.userprofile.delete()
+"""
 
 @receiver(post_delete, sender=School)
 def delete_school_icon(sender, instance, **kwargs):

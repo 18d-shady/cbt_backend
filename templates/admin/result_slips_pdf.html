@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @page { size: A4; margin: 1cm; }
+        .slip { 
+            border: 2px solid #333; padding: 20px; 
+            margin-bottom: 50px; page-break-after: always;
+            font-family: Helvetica, sans-serif;
+        }
+        .header { text-align: center; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
+        .school-name { font-size: 24pt; font-weight: bold; color: {{ school.color }}; }
+        .student-info { margin-bottom: 20px; }
+        .score-box { 
+            background: #f0f0f0; padding: 15px; text-align: center; 
+            font-size: 18pt; border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    {% for s in scores %}
+    <div class="slip">
+        <div class="header">
+            <div class="school-name">{{ school.name|upper }}</div>
+            <div>EXAMINATION RESULT SLIP</div>
+            <div>Academic Year: {{ exam.academic_year }}</div>
+        </div>
+
+        <div class="student-info">
+            <p><strong>Name:</strong> {{ s.user.get_full_name }}</p>
+            <p><strong>Student ID:</strong> {{ s.user.username }}</p>
+            <p><strong>Course:</strong> {{ exam.course.name }}</p>
+            <p><strong>Class:</strong> {{ s.user.userprofile.student_class }}</p>
+        </div>
+
+        <div class="score-box">
+            SCORE: {{ s.score }} / {{ total_possible }}
+            <br>
+            <small>Percentage: {{ s.score|add:"0" }}%</small> </div>
+
+        <div style="margin-top: 50px; text-align: right;">
+            <p>_________________________</p>
+            <p>Exam Controller Signature</p>
+        </div>
+    </div>
+    {% endfor %}
+</body>
+</html>

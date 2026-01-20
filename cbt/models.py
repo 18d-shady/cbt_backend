@@ -25,23 +25,39 @@ class School(models.Model):
     color = models.CharField(max_length=10, default="#0D7313")
     icon = models.ImageField(upload_to=school_icon_path, null=True, blank=True)
     is_active = models.BooleanField(default=False)
-    subscription_end_date = models.DateTimeField(null=True, blank=True)
+    subscription_plan = models.CharField(
+        max_length=20,
+        choices=[
+            ('trial', 'Trial'),
+            ('monthly', 'Monthly'),
+            ('yearly', 'Yearly'),
+        ],
+        default='trial'
+    )
 
-    def check_active_status(self):
-        """Helper to auto-check if subscription has lapsed"""
-        if self.subscription_end_date and timezone.now() > self.subscription_end_date:
-            self.is_active = False
-            self.save()
-        return self.is_active
-
+    subscription_start = models.DateTimeField(null=True, blank=True)
+    subscription_end = models.DateTimeField(null=True, blank=True)
     trial_used = models.BooleanField(default=False)
-    paystack_customer_code = models.CharField(max_length=100, blank=True)
-    paystack_subscription_code = models.CharField(max_length=100, blank=True)
+
+
+    def is_subscription_active(self):
+        if not self.subscription_end:
+            return False
+        return timezone.now() <= self.subscription_end
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} ({self.get_school_type_display()})"
+
+class SchoolRequest(models.Model):
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    processed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.email
 
 
 class StudentClass(models.Model):
@@ -83,14 +99,15 @@ class Course(models.Model):
         unique_together = ("school", "name", "code", "target_class")
 
     def __str__(self):
-        return f"{self.name} ({self.target_class})"
+        return f"{self.name} - {self.target_class.name if self.target_class else 'General'}"
 
 
 class Exam(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="exams", null=True)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="exams")
+    academic_year = models.CharField(max_length=20, default="2025/2026", help_text="e.g., 2025/2026")
     title = models.CharField(max_length=255, blank=True)
-    start_datetime = models.DateTimeField(null=True, blank=True, help_text="When the exam window opens")
+    start_datetime = models.DateTimeField(null=True, blank=True, help_text="When the exam window opens, Date:2026-12-31 14:30:00")
     total_questions = models.PositiveIntegerField()
     duration_minutes = models.PositiveIntegerField()
     rules = models.TextField(blank=True, null=True)
@@ -132,8 +149,8 @@ class Question(models.Model):
     
     school = models.ForeignKey(School, on_delete=models.CASCADE, null=True)
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="questions")
-    question_number = models.PositiveIntegerField()
-    question_type = models.CharField(max_length=10, choices=QUESTION_TYPES, default='mcq')
+    question_number = models.PositiveIntegerField()#editable=False
+    question_type = models.CharField(max_length=10, choices=QUESTION_TYPES, default='obj')
     
     question_text = models.TextField(blank=True, null=True)
     
@@ -148,6 +165,7 @@ class Question(models.Model):
     # For FITG: Store the exact string
     # For Essay: Leave blank
     correct_answer = models.TextField(blank=True, null=True, help_text="Correct option letter or exact word for FITG")
+    point = models.FloatField(default=1.0, help_text="Points for getting this right")
 
     class Meta:
         unique_together = ('exam', 'question_number')
@@ -155,6 +173,16 @@ class Question(models.Model):
 
     def __str__(self):
         return f"Q{self.question_number} - {self.get_question_type_display()}"
+    
+    def save(self, *args, **kwargs):
+        if not self.question_number:
+            # Auto-assign the next number for this specific exam
+            last_q = Question.objects.filter(exam=self.exam).order_by("-question_number").first()
+            if last_q:
+                self.question_number = last_q.question_number + 1
+            else:
+                self.question_number = 1
+        super().save(*args, **kwargs)
 
 class QuestionImage(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="images")

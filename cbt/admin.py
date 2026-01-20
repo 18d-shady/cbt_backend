@@ -1,5 +1,6 @@
 #admin.py
 import io
+from django.contrib import messages
 import re
 from django.core.files.base import ContentFile
 from django.urls import path, reverse
@@ -8,7 +9,7 @@ from django.contrib import admin
 from django.contrib.auth.models import User
 from .models import (
     Course, QuestionImage, Exam, Question, 
-    StudentAnswer, ExamSession, StudentScore, CourseRegistration
+    StudentAnswer, ExamSession, StudentClass, StudentScore, CourseRegistration
 )
 from django.utils.html import format_html
 from django.utils.text import slugify
@@ -18,19 +19,25 @@ from docx.shared import Inches
 from docx.shared import Pt, RGBColor
 import io
 from .views import grade_essays
-
-
+import openpyxl
+from openpyxl.styles import Font
+from django.db.models import Sum
+from xhtml2pdf import pisa
+from django.template.loader import get_template
 from .admin_base import SchoolScopedAdmin, is_school_admin, is_superadmin
 from .admin_users import SchoolAdmin, CustomUserAdmin # Triggers registration
 
 from unfold.admin import ModelAdmin # Ensure you use this
 from unfold.decorators import action
+from unfold.admin import TabularInline
+
 
 
 
 @admin.register(Course)
 class CourseAdmin(SchoolScopedAdmin, ModelAdmin):
     list_display = ("name", "code", "target_class", "get_school_type")
+    actions = ['clone_to_classes',]
 
     def get_school_type(self, obj):
         # If we are looking at an existing object
@@ -69,21 +76,72 @@ class CourseAdmin(SchoolScopedAdmin, ModelAdmin):
                 list_display.remove('code')
         return list_display
     
-class QuestionImageInline(admin.TabularInline):
+
+    @action(description="Clone this course to other classes")
+    def clone_to_classes(self, request, queryset):
+        if queryset.count() > 1:
+            self.message_user(request, "Please select only one course to clone at a time.", messages.ERROR)
+            return
+        
+        course = queryset.first()
+        school = request.user.userprofile.school
+
+        # If the user has selected classes and clicked 'Confirm'
+        if 'apply' in request.POST:
+            class_ids = request.POST.getlist('target_classes')
+            created_count = 0
+            skipped_count = 0
+
+            for class_id in class_ids:
+                target_class = StudentClass.objects.get(id=class_id)
+                
+                # Prevent duplicates if the course already exists in that class
+                new_course, created = Course.objects.get_or_create(
+                    school=school,
+                    name=course.name,
+                    target_class=target_class,
+                    defaults={'code': course.code}
+                )
+                if created:
+                    created_count += 1
+                else:
+                    skipped_count += 1
+
+            self.message_user(request, f"Cloned '{course.name}' to {created_count} classes. (Skipped {skipped_count} existing)")
+            return redirect(request.get_full_path())
+
+        # Otherwise, show the selection page
+        # Filter classes to only show those that DON'T already have this course
+        existing_class_ids = Course.objects.filter(school=school, name=course.name).values_list('target_class_id', flat=True)
+        available_classes = StudentClass.objects.filter(school=school).exclude(id__in=existing_class_ids)
+
+        return render(request, 'admin/clone_course_to_classes.html', {
+            'course': course,
+            'available_classes': available_classes,
+            'opts': self.model._meta, # Required for admin breadcrumbs
+        })
+    
+class QuestionImageInline(TabularInline):
     model = QuestionImage
     extra = 1
      
-class QuestionInline(admin.TabularInline):
+class QuestionInline(TabularInline):
     model = Question
     fields = ('question_number', 'question_type')
-    extra = 0  # Admin can add as many as they need
+    # Make question_number read-only so the sequence isn't accidentally broken
+    readonly_fields = ('question_number',)
+    extra = 0
     ordering = ('question_number',)
+    # This prevents the admin from adding new rows manually 
+    # since save_model handles the count
+    can_delete = True
 
 @admin.register(Exam)
 class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
     #form = ExamForm # Including the date/time fix from before
     inlines = [QuestionInline]
-    list_display = ("title", "course", "total_questions", "grading_actions")
+    list_display = ("title", "course", "academic_year","total_questions", "grading_actions")
+    list_filter = ("academic_year", "course")
     
     def get_urls(self):
         urls = super().get_urls()
@@ -91,9 +149,39 @@ class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
             path('<int:exam_id>/generate-word-template/', self.generate_word_template, name="generate-word-template"),
             path('<int:exam_id>/import-word-questions/', self.import_word_questions, name="import-word-questions"),
             path('<int:exam_id>/grade-essays/', self.grade_essays_view, name="grade-essays"),
+            path('<int:exam_id>/export-results/', self.export_results, name="export-exam-results"),
+            path('<int:exam_id>/print-slips/', self.print_result_slips, name="print-result-slips"),
         ]
         return custom_urls + urls
     
+    def save_model(self, request, obj, form, change):
+        # First, save the Exam object itself
+        super().save_model(request, obj, form, change)
+        
+        # Automatically generate Question skeletons based on total_questions
+        if obj.total_questions:
+            existing_questions = obj.questions.values_list('question_number', flat=True)
+            new_questions = []
+            
+            for i in range(1, obj.total_questions + 1):
+                if i not in existing_questions:
+                    new_questions.append(
+                        Question(
+                            exam=obj,
+                            school=obj.school,
+                            question_number=i,
+                            question_type='obj'
+                        )
+                    )
+            
+            existing_count = obj.questions.count()
+            if existing_count > obj.total_questions:
+                # Optional: Delete the excess questions if the admin reduced the number
+                obj.questions.filter(question_number__gt=obj.total_questions).delete()
+            if new_questions:
+                Question.objects.bulk_create(new_questions)
+                self.message_user(request, f"Automatically generated {len(new_questions)} question placeholders.")
+                    
     def generate_word_template(self, request, exam_id):
         exam = self.get_object(request, exam_id)
         questions = exam.questions.all().order_by('question_number')
@@ -139,7 +227,12 @@ class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
             ans_p.add_run("[[[% CORRECT %]]] ").bold = True
             ans_p.add_run(q.correct_answer or "")
             ans_p.add_run(" [[[% /CORRECT %]]]").bold = True
-            
+
+            pts_p = doc.add_paragraph()
+            pts_p.add_run("[[[% POINTS %]]] ").bold = True
+            pts_p.add_run(str(q.point))
+            pts_p.add_run(" [[[% /POINTS %]]]").bold = True
+                
             doc.add_paragraph("[[[% END %]]]").bold = True
             # Note: doc.add_page_break() has been removed here to allow continuous scrolling
 
@@ -197,6 +290,7 @@ class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
                     q_type = extract_tag("TYPE", block).lower()
                     q_text = extract_tag("Q", block)
                     opt_block = extract_tag("OPTIONS", block)
+                    q_points = extract_tag("POINTS", block) or "1.0"
                     
                     # Update Question data
                     question, created = Question.objects.update_or_create(
@@ -211,6 +305,7 @@ class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
                             'option_c': extract_option('C', opt_block) if q_type == 'obj' else None,
                             'option_d': extract_option('D', opt_block) if q_type == 'obj' else None,
                             'correct_answer': extract_tag("CORRECT", block).upper(),
+                            'point': float(q_points),
                         }
                     )
 
@@ -246,16 +341,87 @@ class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
                 kwargs["queryset"] = Course.objects.filter(school=school)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
+    def print_result_slips(self, request, exam_id):
+        exam = self.get_object(request, exam_id)
+        scores = StudentScore.objects.filter(exam=exam).select_related('user', 'user__userprofile__student_class')
+        total_possible = exam.questions.aggregate(total=Sum('point'))['total'] or 0
+        
+        template_path = 'admin/result_slips_pdf.html'
+        context = {
+            'exam': exam,
+            'scores': scores,
+            'total_possible': total_possible,
+            'school': exam.school,
+        }
+        
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'filename="results_{slugify(exam.title)}.pdf"'
+        
+        template = get_template(template_path)
+        html = template.render(context)
+        
+        pisa_status = pisa.CreatePDF(html, dest=response)
+        if pisa_status.err:
+            return HttpResponse('We had some errors <pre>' + html + '</pre>')
+        return response
+    
+    def export_results(self, request, exam_id):
+        exam = self.get_object(request, exam_id)
+        scores = StudentScore.objects.filter(exam=exam).select_related('user', 'user__userprofile__student_class')
+        
+        # Create Workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Exam Results"
+
+        # Header Row
+        headers = ["Student Name", "Username/ID", "Class", "Score", "Total Possible", "Percentage (%)"]
+        ws.append(headers)
+        
+        # Style Header
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+
+        # Calculate Total Possible Points
+        total_possible = exam.questions.aggregate(total=Sum('point'))['total'] or 0
+
+        # Data Rows
+        for s in scores:
+            profile = getattr(s.user, 'userprofile', None)
+            class_name = str(profile.student_class) if profile else "N/A"
+            percentage = (s.score / total_possible * 100) if total_possible > 0 else 0
+            
+            ws.append([
+                s.user.get_full_name(),
+                s.user.username,
+                class_name,
+                s.score,
+                total_possible,
+                round(percentage, 2)
+            ])
+
+        # Response
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename={slugify(exam.title)}_results.xlsx'
+        wb.save(response)
+        return response
+    
     def grading_actions(self, obj):
         return format_html(
-            '<a class="button" href="{}">Grade Essays</a>&nbsp;'
-            '<a class="button" href="{}">Get Word Template</a>&nbsp;'
-            '<a class="button" style="background-color: #417690;" href="{}">Import Questions</a>',
+            '<div style="display: flex; gap: 6px;">'
+            '<a class="button" style="background-color: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: x-small;" href="{}">Grade Essays</a>'
+            '<a class="button" style="background-color: #3b82f6; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: x-small;" href="{}">Get Word Template</a>'
+            '<a class="button" style="background-color: #6366f1; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: x-small;" href="{}">Import Questions</a>'
+            '<a class="button" style="background-color: #f59e0b; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: x-small;" href="{}">Export Results</a>'
+            '<a class="button" style="background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: x-small;" href="{}">Print Result Slips</a>'
+            '</div>',
             reverse('admin:grade-essays', args=[obj.pk]),
             reverse('admin:generate-word-template', args=[obj.pk]),
-            reverse('admin:import-word-questions', args=[obj.pk])
+            reverse('admin:import-word-questions', args=[obj.pk]),
+            reverse('admin:export-exam-results', args=[obj.pk]),
+            reverse('admin:print-result-slips', args=[obj.pk])
         )
-    grading_actions.short_description = "Management"
+    grading_actions.short_description = "Exam Dashboard"
 
     def grade_essays_view(self, request, exam_id):
         # Import your view function
@@ -264,6 +430,7 @@ class ExamAdmin(SchoolScopedAdmin, ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(SchoolScopedAdmin, ModelAdmin):
+    inlines = [QuestionImageInline]
     list_display = ("question_number", "exam", "question_type", "question_text")
     list_filter = ("exam", "question_type")
     search_fields = ("question_text",)
@@ -290,12 +457,26 @@ class StudentScoreAdmin(SchoolScopedAdmin):
     readonly_fields = ("user", "exam", "score") # Scores usually shouldn't be edited manually
 
 @admin.register(ExamSession)
-class ExamSessionAdmin(SchoolScopedAdmin):
+class ExamSessionAdmin(SchoolScopedAdmin, ModelAdmin):
     list_display = ("user", "exam", "start_time", "end_time")
+    readonly_fields = ("user", "exam", "start_time", "end_time")
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+
 
 @admin.register(StudentAnswer)
-class StudentAnswerAdmin(SchoolScopedAdmin):
-    list_display = ("user", "question", "answer_text", "is_correct", "is_graded", "points_earned")
+class StudentAnswerAdmin(SchoolScopedAdmin, ModelAdmin):
+    list_display = ("user", "question", "answer_short", "is_correct", "points_earned")
+    list_filter = ("question__exam", "is_correct")
+    readonly_fields = [f.name for f in StudentAnswer._meta.fields] # Make EVERYTHING read-only
+
+    def answer_short(self, obj):
+        return obj.answer_text[:50] + "..." if len(obj.answer_text) > 50 else obj.answer_text
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 # Re-register User

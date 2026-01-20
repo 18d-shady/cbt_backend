@@ -15,6 +15,11 @@ urlpatterns = [
     path("api/exam/<int:exam_id>/time/", RemainingTimeView.as_view(), name="remaining-time"),
     path("api/exam/<int:exam_id>/end/", EndExamSessionView.as_view(), name="end-session"),
 
+
+    # Subscription and Payment URLs
     path("api/demo/", DemoRequestView.as_view(), name="demo-request"),
-    path("api/verify-payment/", paystack_webhook, name="verify-payment"),
+    path("api/subscribe/", StartSubscriptionView.as_view(), name="start-subscription"),
+    path("api/paystack-webhook/", paystack_webhook, name="paystack-webhook"),
+    path("api/request-school/", RequestSchoolView.as_view(), name="school-request"),
+    path("api/check-school/", CheckSchoolView.as_view(), name="check-school"),
 ]

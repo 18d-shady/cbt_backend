@@ -1,5 +1,6 @@
 from datetime import timedelta
-from django.shortcuts import redirect, render
+from django.utils.timezone import now
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 import requests
 from rest_framework import generics, status
@@ -8,9 +9,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from django.db.models import Sum
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib import messages
+from rest_framework.decorators import api_view
 import json
 import hmac
 import hashlib
@@ -19,7 +22,7 @@ from django.core.mail import send_mail
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 
-from .models import Exam, Question, School, StudentAnswer, ExamSession, StudentScore, CourseRegistration, UserProfile
+from .models import Exam, Question, School, SchoolRequest, StudentAnswer, ExamSession, StudentScore, CourseRegistration, UserProfile
 from .serializers import (
     ExamSerializer,
     QuestionWithAnswerSerializer,
@@ -257,22 +260,35 @@ class EndExamSessionView(APIView):
         # Logic: We allow the submit even if slightly over, but you can be strict:
         # if timezone.now() > session.end_time + timezone.timedelta(seconds=30): ...
 
-        correct_count = StudentAnswer.objects.filter(
+        # Sum the 'point' value of all questions where is_correct is True
+        score_data = StudentAnswer.objects.filter(
             school=school,
             user=user,
             question__exam_id=exam_id,
             is_correct=True
-        ).count()
+        ).aggregate(total_points=Sum('question__point'))
+
+        total_score = score_data['total_points'] or 0.0
+
+        # Handle Essays: Add manually graded points
+        essay_points = StudentAnswer.objects.filter(
+            user=user,
+            question__exam_id=exam_id,
+            question__question_type='essay',
+            is_graded=True
+        ).aggregate(essay_sum=Sum('points_earned'))['essay_sum'] or 0.0
+
+        final_total = total_score + essay_points
 
         StudentScore.objects.update_or_create(
             school=school,
             user=user,
             exam_id=exam_id,
-            defaults={"score": correct_count}
+            defaults={"score": final_total}
         )
 
         session.delete()
-        return Response({"score": correct_count})
+        return Response({"score": final_total})
 
 
 class DemoRequestView(APIView):
@@ -291,98 +307,209 @@ class DemoRequestView(APIView):
             recipient_list=[settings.ADMIN_EMAIL],
         )
         return Response({"message": "Request received"}, status=status.HTTP_201_CREATED)
-    
 
-# 2. Paystack Webhook (Production Standard)
-@csrf_exempt
-def paystack_webhook(request):
-    payload = request.body
-    sig_header = request.headers.get('x-paystack-signature')
-    
-    # Verify the request is actually from Paystack
-    hash = hmac.new(
-        settings.PAYSTACK_SECRET_KEY.encode('utf-8'),
-        payload,
-        hashlib.sha512
-    ).hexdigest()
 
-    if hash == sig_header:
-        data = json.loads(payload)
-        if data['event'] == 'charge.success':
-            customer_email = data['data']['customer']['email']
-            school = School.objects.filter(email=customer_email).first()
-            base_date = school.subscription_end_date if (school.subscription_end_date and school.subscription_end_date > timezone.now()) else timezone.now()
-    
-            school.subscription_end_date = base_date + timedelta(days=30)
-            school.is_active = True
-            school.save()
-            return HttpResponse(status=200)
-    
-    return HttpResponse(status=400)
-
-class VerifyPaymentView(APIView):
-    permission_classes = [AllowAny] # Allow non-logged in users to verify
+class CheckSchoolView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        reference = request.data.get("reference")
-        plan = request.data.get("plan")
-        
-        # Verify with Paystack API
-        url = f"https://api.paystack.co/transaction/verify/{reference}"
-        headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-        response = requests.get(url, headers=headers)
-        res_data = response.json()
+        email = request.data.get("email")
 
-        if res_data['status'] and res_data['data']['status'] == 'success':
-            email = res_data['data']['customer']['email']
-            
-            # Check if this school/email already exists
-            try:
-                profile = UserProfile.objects.get(user__email=email)
-                school = profile.school
-                school.is_active = True
-                # logic: add 30 days to current date or end_date
-                school.save()
-                return Response({"status": "active", "message": "Subscription extended!"})
-            
-            except UserProfile.DoesNotExist:
-                # NEW USER LOGIC
-                # Send email to you (Admin) to create the school
-                send_mail(
-                    subject="NEW SCHOOL PAYMENT - ACTIVATION REQUIRED",
-                    message=f"A new user paid for {plan}.\nEmail: {email}\nRef: {reference}\nPlease create their school profile.",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[settings.ADMIN_EMAIL],
+        school = School.objects.filter(email=email).first()
+
+        if school:
+            return Response({
+                "exists": True,
+                "school_name": school.name,
+                "is_active": school.is_active,
+            })
+
+        return Response({"exists": False})
+
+class RequestSchoolView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        phone = request.data.get("phone")
+
+        SchoolRequest.objects.get_or_create(
+            email=email,
+            defaults={"phone": phone}
+        )
+
+        send_mail(
+            "New School Creation Request",
+            f"Email: {email}\nPhone: {phone}",
+            settings.DEFAULT_FROM_EMAIL,
+            [settings.ADMIN_EMAIL],
+        )
+
+        return Response({
+            "message": "School request submitted. You will be contacted."
+        }, status=201)
+
+
+PLAN_DAYS = {
+    'trial': 30,
+    'monthly': 30,
+    'yearly': 365,
+}   
+
+class StartSubscriptionView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        plan = request.data.get("plan")  # trial | monthly | yearly
+        email = request.data.get("email")
+
+        if plan not in PLAN_DAYS:
+            return Response({"error": "Invalid plan"}, status=400)
+
+        school = School.objects.filter(email=email).first()
+
+        # Ensure school exists
+        if not school:
+            return Response({
+                "error": "No school found with this email. Request creation instead."
+            }, status=404)  
+
+        # ---- TRIAL ----
+        if plan == "trial":
+            if school.trial_used:
+                return Response(
+                    {"error": "Trial already used"},
+                    status=403
                 )
+
+            self.activate_subscription(school, plan)
+            school.trial_used = True
+            school.save()
+
+            return Response({"message": "Trial activated"})
+
+        # ---- PAID PLANS ----
+        return self.initialize_paystack_payment(email, plan)
+
+    def activate_subscription(self, school, plan):
+        from django.utils.timezone import now
+        from datetime import timedelta
+
+        school.subscription_plan = plan
+        school.subscription_start = now()
+        school.subscription_end = now() + timedelta(days=PLAN_DAYS[plan])
+        school.is_active = True
+        school.save()
+
+    def initialize_paystack_payment(self, email, plan):
+        amount_map = {
+            'monthly': 1000000,
+            'yearly': 10000000,
+        }
+        try:
+
+            response = requests.post(
+                "https://api.paystack.co/transaction/initialize",
+                headers={
+                    "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "email": email,
+                    "amount": amount_map[plan],
+                    "metadata": {
+                        "plan": plan,
+                    },
+                }
+            )
+
+            res_data = response.json()
+
+            # If Paystack returns a 200 but 'status' is False, or if it returns a 400/401
+            if response.status_code != 200 or not res_data.get('status'):
                 return Response({
-                    "status": "pending", 
-                    "message": "Payment verified! Our team will set up your school account within 24 hours."
-                })
-        
-        return Response({"status": "failed"}, status=400)
-    
-# views.py
-def subscription_expired_page(request):
-    return render(request, "billing/expired.html", {
-        "school": request.user.userprofile.school if request.user.is_authenticated else None
-    })
+                    "error": res_data.get('message', "Paystack initialization failed")
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response(res_data) # This contains the data.authorization_url
+
+        except requests.exceptions.RequestException as e:
+            return Response({"error": "External payment gateway unreachable"}, status=503)
+
+
+
+@csrf_exempt
+def paystack_webhook(request):
+    payload = json.loads(request.body)
+
+    if payload['event'] != 'charge.success':
+        return HttpResponse(status=200)
+
+    data = payload['data']
+    email = data['customer']['email']
+    plan = data['metadata']['plan']
+
+    school = School.objects.filter(email=email).first()
+
+    if not school:
+        return Response({
+            "error": "No school found with this email. Request creation instead."
+        }, status=404)
+
+    days = PLAN_DAYS[plan]
+
+    school.subscription_plan = plan
+    school.subscription_start = now()
+    school.subscription_end = now() + timedelta(days=days)
+    school.is_active = True
+    school.save()
+
+    return HttpResponse(status=200)
+
+
 
 # In your admin.py or views.py
+from django.db.models import Sum
+
 def grade_essays(request, exam_id):
-    ungraded = StudentAnswer.objects.filter(
-        question__exam_id=exam_id, 
-        question__question_type='essay', 
-        is_graded=False
-    )
+    exam = get_object_or_404(Exam, id=exam_id)
+    answers = StudentAnswer.objects.filter(
+        question__exam=exam, 
+        question__question_type='essay'
+    ).select_related('user', 'question').order_by('is_graded', 'user')
     
     if request.method == "POST":
-        for answer in ungraded:
-            score = request.POST.get(f"score_{answer.id}")
-            if score:
-                answer.points_earned = float(score)
+        # 1. Update the individual essay answers
+        for answer in answers:
+            score_input = request.POST.get(f"score_{answer.id}")
+            if score_input is not None and score_input != "":
+                val = float(score_input)
+                # Cap the score at the question's max points
+                val = min(val, answer.question.point)
+                
+                answer.points_earned = val
                 answer.is_graded = True
+                # A question is 'correct' if it earned any points
+                answer.is_correct = True if val > 0 else False
                 answer.save()
-        messages.success(request, "Scores updated successfully!")
+
+        # 2. Recalculate StudentScores (DO THIS ONCE outside the loop)
+        # Find all students who took this exam
+        student_ids = StudentAnswer.objects.filter(question__exam=exam).values_list('user', flat=True).distinct()
+        
+        for s_id in student_ids:
+            total_pts = StudentAnswer.objects.filter(
+                user_id=s_id, 
+                question__exam=exam
+            ).aggregate(total=Sum('points_earned'))['total'] or 0.0
+            
+            StudentScore.objects.update_or_create(
+                user_id=s_id, 
+                exam=exam,
+                defaults={'score': int(total_pts), 'school': exam.school}
+            )
+        
+        messages.success(request, "Grades saved. Scores recalculated for all students.")
         return redirect("..")
 
-    return render(request, "admin/grade_essays.html", {"answers": ungraded})
+    return render(request, "admin/grade_essays.html", {"answers": answers, "exam": exam})

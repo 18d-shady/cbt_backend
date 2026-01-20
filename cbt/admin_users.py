@@ -53,43 +53,6 @@ class SchoolAdmin(ModelAdmin):
     def subscription_status(self, obj):
         return "Active" if obj.is_active else "Inactive"
 
-    # --- ACTION: Send Welcome Email ---
-    def send_welcome_email(self, request, queryset):
-        for school in queryset:
-            # Find the admin user for this school
-            admin_profile = UserProfile.objects.filter(school=school, role='admin').first()
-            
-            if not admin_profile:
-                self.message_user(request, f"No admin user found for {school.name}", messages.ERROR)
-                continue
-
-            user = admin_profile.user
-            subject = f"Welcome to JustCBT - {school.name} Account Active"
-            
-            # Context for the email template
-            context = {
-                'school_name': school.name,
-                'username': user.username,
-                'login_url': "https://yourdomain.com/admin/", # Change to your actual URL
-            }
-            
-            # Render HTML content
-            html_content = render_to_string('emails/welcome_credentials.html', context)
-            text_content = strip_tags(html_content)
-
-            email = EmailMultiAlternatives(
-                subject,
-                text_content,
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email]
-            )
-            email.attach_alternative(html_content, "text/html")
-            email.send()
-
-        self.message_user(request, "Welcome emails sent successfully.")
-    
-    send_welcome_email.short_description = "Send Welcome Credentials to School Admin"
-
     # --- ACTION: Bulk Activate ---
     def activate_schools(self, request, queryset):
         queryset.update(is_active=True)
@@ -149,7 +112,7 @@ class CustomUserAdmin(SchoolScopedAdmin, UserAdmin, ModelAdmin):
 
     #change_list_template = "admin/user_changelist.html"
     actions_list = ["import_students_link"]
-    actions = ['download_existing_slips']
+    actions = ['download_existing_slips', 'bulk_register_courses',]
     add_fieldsets = (
         (None, {
             'classes': ('extra_pretty',),
@@ -449,6 +412,35 @@ class CustomUserAdmin(SchoolScopedAdmin, UserAdmin, ModelAdmin):
 
         p.save()
         return response
+    
+    # admin_users.py or admin.py
+    @action(description="Bulk Register Students to Courses")
+    def bulk_register_courses(self, request, queryset):
+        
+        # If this is the initial click, show a selection page
+        if 'apply' not in request.POST:
+            # Get courses for this school
+            school = request.user.userprofile.school
+            courses = Course.objects.filter(school=school)
+            
+            return render(request, 'admin/bulk_course_reg.html', {
+                'students': queryset,
+                'courses': courses,
+            })
+
+        # If the form was submitted
+        course_ids = request.POST.getlist('courses')
+        count = 0
+        for student in queryset:
+            for c_id in course_ids:
+                reg, created = CourseRegistration.objects.get_or_create(
+                    user=student, 
+                    course_id=c_id,
+                    defaults={'school': request.user.userprofile.school}
+                )
+                if created: count += 1
+                
+        self.message_user(request, f"Successfully registered {count} new enrollments.")
 
     # --- PDF ACTION (FOR EXISTING STUDENTS) ---
     def download_existing_slips(self, request, queryset):

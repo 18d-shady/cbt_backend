@@ -1,4 +1,4 @@
-{% extends "admin/base_site.html" %}
+{% extends "unfold/layouts/base.html" %}
 {% load i18n admin_urls %}
 
 {% block breadcrumbs %}
@@ -27,8 +27,8 @@
             </div>
 
             <div class="submit-row" style="margin: 0; padding: 0; background: none; border: none; text-align: left;">
-                <input type="submit" value="Process Questions" class="default" style="float: none; height: 40px; width: 180px;">
-                <a href="../" class="closelink" style="margin-left: 15px; vertical-align: middle;">Cancel</a>
+                <input type="submit" value="Process Questions" class="default bg-blue-600 text-white px-6 py-2 rounded font-bold" style="float: none; height: 40px; width: 180px;">
+                <a href="../" class="closelink ml-4 text-gray-500" style="margin-left: 15px; vertical-align: middle;">Cancel</a>
             </div>
         </form>
     </div>

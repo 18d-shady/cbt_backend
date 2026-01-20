@@ -13,6 +13,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 import dj_database_url
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -143,6 +147,19 @@ USE_I18N = True
 
 USE_TZ = True
 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'versatech19@gmail.com'
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')  # Your Google App Password
+DEFAULT_FROM_EMAIL = 'JUST CBT <versatech19@gmail.com>'
+
+ADMIN_EMAIL = 'olehidavis@gmail.com'
+PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY') 
+FRONTEND_URL = "https://cbt-frontend-taupe.vercel.app/"
+LOGIN_REDIRECT_URL = '/admin/'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -165,10 +182,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-
-PAYSTACK_SECRET_KEY = "sk_test_xxxx"
-ADMIN_EMAIL = "olehidavis@gmail.com"
-DEFAULT_FROM_EMAIL = "noreply@justcbt.com"
 
 
 UNFOLD = {

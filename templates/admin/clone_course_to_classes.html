@@ -1,0 +1,32 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n l10n admin_urls %}
+
+{% block content %}
+<div class="p-6">
+    <h2 class="text-xl font-bold mb-4">Clone Course: {{ course.name }}</h2>
+    <p class="mb-6 text-gray-600">Select the classes you want to create a <strong>{{ course.name }}</strong> course for:</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clone_to_classes" />
+        <input type="hidden" name="apply" value="yes" />
+        <input type="hidden" name="_selected_action" value="{{ course.id }}" />
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            {% for class in available_classes %}
+                <label class="flex items-center p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="target_classes" value="{{ class.id }}" class="mr-3">
+                    <span>{{ class.name }} {{ class.group|default:"" }}</span>
+                </label>
+            {% empty %}
+                <p class="text-red-500">All available classes already have a course with this name.</p>
+            {% endfor %}
+        </div>
+
+        <div class="flex gap-4">
+            <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded-lg font-bold">Create Courses</button>
+            <a href="." class="bg-gray-200 px-6 py-2 rounded-lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
