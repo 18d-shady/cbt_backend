@@ -213,10 +213,12 @@ UNFOLD = {
 
 
 """
+source venv/bin/activate
+
 superadmin = User.objects.create_superuser( username="admin001", 
 email="admin@example.com",    password="winston1")
 
-
+maurice123
 
 myschool admin: my-school_admin , password winston2
 
