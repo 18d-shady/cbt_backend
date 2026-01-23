@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from django.templatetags.static import static
 
 
 
@@ -166,6 +167,7 @@ LOGIN_REDIRECT_URL = '/admin/'
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = os.path.join(BASE_DIR, "static")
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = '/media/'
@@ -190,6 +192,8 @@ UNFOLD = {
     "SITE_TITLE": "JustCBT",
     "SITE_HEADER": "JustCBT Portal",
     "SITE_SYMBOL": "JC",
+    "SITE_LOGO": lambda request: static("images/icon.png"),
+    "SITE_FAVICON": lambda request: static("images/icon.png"),
     # We leave colors out of here so our CSS override takes over
     "SIDEBAR": {
         "show_search": True,

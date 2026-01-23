@@ -1,4 +1,5 @@
 {% extends "unfold/layouts/base.html" %}
+{% load static %} {# IMPORTANT: Load static tags #}
 
 {% block extra_head %}
 {{ block.super }}
@@ -32,33 +33,27 @@
 
 {% block branding %}
 {# We set the color variable here in a standard HTML attribute to avoid CSS parsing errors #}
-<div class="flex items-center gap-2.5 py-1" 
+<div class="flex items-center gap-2 py-1" 
      style="--dynamic-color: {% if user.userprofile.school.color %}{{ user.userprofile.school.color }}{% else %}#0D7313{% endif %};">
+
+    <img src="{% static 'images/icon.png' %}" 
+         class="brand-logo-box" 
+         style="width: 28px; height: 28px;">
+
+    <div class="h-6 w-px bg-slate-200 mx-1"></div>
     
     {% if user.userprofile.school.icon %}
         <img src="{{ user.userprofile.school.icon.url }}" 
-             style="width: 34px !important; height: 34px !important; min-width: 28px; border-radius: 4px; object-fit: contain; background: white; padding: 2px; border: 1px solid #f1f5f9;">
-    {% else %}
-        <div style="width: 34px !important; height: 34px !important; background: #f1f5f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #94a3b8;">
-            JC
-        </div>
+             style="width: 28px; height: 28px; border-radius: 4px; object-fit: contain;">
     {% endif %}
 
-    <div class="flex flex-col justify-center border-l border-slate-200 pl-2.5 text-sm">
-        {% if user.userprofile.school.name %}
-            <span class="school-subtitle" style="color: var(--dynamic-color) !important;">
-                {{ user.userprofile.school.name }}
-            </span>
-        {% endif %}
-        {% if user.userprofile.school.email %}
-            <span class="school-subtitle" style="color: var(--dynamic-color) !important;">
-                {{ user.userprofile.school.email }}
-            </span>
-        {% else %}
-            <span class="text-xs font-black text-slate-800 leading-none tracking-tighter">
-                Just<span style="color: var(--dynamic-color);">CBT</span>
-            </span>
-        {% endif %}
+    <div class="flex flex-col justify-center text-sm ml-1">
+        <span class="school-subtitle" style="color: var(--dynamic-color) !important;">
+            {{ user.userprofile.school.name|default:"JustCBT" }}
+        </span>
+        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            {{ user.userprofile.school.email|default:"Portal" }}
+        </span>
     </div>
 </div>
 {% endblock %}
