@@ -157,7 +157,8 @@ DEFAULT_FROM_EMAIL = 'JUST CBT <versatech19@gmail.com>'
 
 ADMIN_EMAIL = 'olehidavis@gmail.com'
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY') 
-FRONTEND_URL = "https://cbt-frontend-taupe.vercel.app/"
+#FRONTEND_URL = "https://cbt-frontend-taupe.vercel.app/"
+FRONTEND_URL = "https://justcbt.com.ng/"
 LOGIN_REDIRECT_URL = '/admin/'
 
 
@@ -218,6 +219,8 @@ source venv/bin/activate
 superadmin = User.objects.create_superuser( username="admin001", 
 email="admin@example.com",    password="winston1")
 
+live super user :username: davisolehi, email: olehidavis@gmail.com, password: winston1
+
 maurice123
 
 myschool admin: my-school_admin , password winston2
@@ -244,5 +247,6 @@ Place the image directly below the [[[% Q %]]] tag.
 
 postgresql://exam_officer:odcHGuE9fyuGMfF8weCxqz6W8RqM1Ts7@dpg-d4vuaj9r0fns739tblj0-a/cbt_db_iwxd
 https://cbt-backend-6tdk.onrender.com
+https://davisolehi.pythonanywhere.com/
 https://cbt-frontend-taupe.vercel.app/
 """
