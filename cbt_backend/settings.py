@@ -192,8 +192,17 @@ UNFOLD = {
     "SITE_TITLE": "JustCBT",
     "SITE_HEADER": "JustCBT Portal",
     "SITE_SYMBOL": "JC",
-    "SITE_LOGO": lambda request: static("images/icon.png"),
-    "SITE_FAVICON": lambda request: static("images/icon.png"),
+    #"SITE_LOGO": lambda request: static("images/icon.png"),
+    "SHOW_VIEW_ON_SITE": False,
+    "SHOW_BACK_BUTTON": True,
+    "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "sizes": "32x32",
+            "type": "image/svg+xml",
+            "href": lambda request: static("images/icon.png"),
+        },
+    ],
     # We leave colors out of here so our CSS override takes over
     "SIDEBAR": {
         "show_search": True,
@@ -227,7 +236,7 @@ live super user :username: davisolehi, email: olehidavis@gmail.com, password: wi
 
 maurice123
 
-myschool admin: my-school_admin , password winston2
+myschool admin: my-school_admin , password winston3
 
 from django.contrib.auth.models import User
 from cbt.models import UserProfile

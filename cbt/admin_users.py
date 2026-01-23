@@ -20,6 +20,7 @@ from django.db.models import Count
 from django.urls import path, reverse
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
+from django.contrib.auth import update_session_auth_hash
 
 from unfold.admin import ModelAdmin # Ensure you use this
 from unfold.decorators import action
@@ -63,7 +64,7 @@ class SchoolAdmin(ModelAdmin):
 class StudentCreationForm(forms.ModelForm):
     middle_name = forms.CharField(max_length=150, required=False, label="Middle Name")
     # Make password optional during edit
-    password = forms.CharField(
+    new_password = forms.CharField(
         widget=forms.PasswordInput(attrs={'class': 'border-gray-300 focus:border-indigo-500'}), 
         required=False,
         help_text="Leave blank to keep current password (during edit)."
@@ -75,14 +76,14 @@ class StudentCreationForm(forms.ModelForm):
     )
     student_class = forms.ModelChoiceField(
         queryset=StudentClass.objects.none(), 
-        required=True,
+        required=False,
         label="Class/Level",
         widget=forms.Select(attrs={'class': 'border-gray-300'})
     )
 
     class Meta:
         model = User
-        fields = ('first_name', 'middle_name', 'last_name', 'username', 'password', 'student_class')
+        fields = ('first_name', 'middle_name', 'last_name', 'username', 'new_password', 'student_class')
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
@@ -92,15 +93,14 @@ class StudentCreationForm(forms.ModelForm):
             school = self.request.user.userprofile.school
             self.fields['student_class'].queryset = StudentClass.objects.filter(school=school)
 
-        # --- Prefill Logic for Edit Mode ---
         if self.instance and self.instance.pk:
-            # 1. Prefill student_class from UserProfile
-            if hasattr(self.instance, 'userprofile'):
-                self.fields['student_class'].initial = self.instance.userprofile.student_class
+            # Check for 'new_password' instead of 'password'
+            if 'new_password' in self.fields:
+                self.fields['new_password'].help_text = "Only enter a password if you want to change it."
             
-            # 2. Prefill middle_name if it was stored in the last_name (per your logic)
-            # If your logic stores it separately in a profile, pull it from there instead
-            self.fields['password'].help_text = "Only enter a password if you want to change it."
+            # Prefill student_class
+            if hasattr(self.instance, 'userprofile') and 'student_class' in self.fields:
+                self.fields['student_class'].initial = self.instance.userprofile.student_class
 
 
 class CustomUserAdmin(SchoolScopedAdmin, UserAdmin, ModelAdmin):
@@ -154,21 +154,15 @@ class CustomUserAdmin(SchoolScopedAdmin, UserAdmin, ModelAdmin):
     )
 
     def get_fieldsets(self, request, obj=None):
-        # If it's a Superadmin, use the default full UserAdmin fieldsets
-        if is_superadmin(request.user):
-            return super().get_fieldsets(request, obj)
+        # Base fields everyone sees
+        fields = ['username', 'new_password']
         
-        # If we are ADDING a new user (obj is None)
-        if not obj:
-            return (
-                (None, {'fields': ('username', 'password', 'student_class')}),
-                ('Personal info', {'fields': ('first_name', 'middle_name', 'last_name')}),
-                ('Status', {'fields': ('is_active',)}),
-            )
+        # Only add student_class if we are adding a new user OR editing a student
+        if not obj or (hasattr(obj, 'userprofile') and obj.userprofile.role == 'student'):
+            fields.append('student_class')
 
-        # If we are EDITING an existing user
         return (
-            (None, {'fields': ('username', 'password', 'student_class')}),
+            (None, {'fields': tuple(fields)}),
             ('Personal info', {'fields': ('first_name', 'middle_name', 'last_name')}),
             ('Status', {'fields': ('is_active',)}),
         )
@@ -263,41 +257,55 @@ class CustomUserAdmin(SchoolScopedAdmin, UserAdmin, ModelAdmin):
 
     # --- 3. UI SAVE HOOK (Single Student) ---
     def save_model(self, request, obj, form, change):
-        if not change and is_school_admin(request.user):
-            # We ignore 'obj' and use our logic to create the user + profile + courses
-            school = request.user.userprofile.school
-            raw_password = form.cleaned_data.get('password')
+        role = 'student'
+        if hasattr(obj, 'userprofile'):
+            role = obj.userprofile.role
+
+        # CASE A: Editing an existing user (Staff or Student)
+        if change:
+            # 1. Update Password if provided
+            raw_password = form.cleaned_data.get('new_password')
+            if raw_password and len(raw_password.strip()) > 0:
+                obj.set_password(raw_password)
             
-            user, final_username = self.create_student_logic(
-                school=school,
-                first=form.cleaned_data.get('first_name'),
-                middle=form.cleaned_data.get('middle_name', ''),
-                last=form.cleaned_data.get('last_name'),
-                password=raw_password,
-                student_class_obj=form.cleaned_data.get('student_class'),
-                manual_username=form.cleaned_data.get('username')
-            )
+            # 2. Update Username (This allows you to change the Admin username)
+            obj.username = form.cleaned_data.get('username')
             
-            # Store for the PDF response
-            request._created_student = {
-                'name': f"{user.first_name} {user.last_name}",
-                'username': final_username,
-                'password': raw_password,
-                'school': school.name
-            }
-        else:
-            new_password = form.cleaned_data.get('password')
-            if new_password:
-                obj.set_password(new_password)
-            
-            # Update the student class in the Profile
-            new_class = form.cleaned_data.get('student_class')
-            if hasattr(obj, 'userprofile'):
-                profile = obj.userprofile
-                profile.student_class = new_class
-                profile.save()
+            # 3. Update Class only if they are a student
+            if role == 'student':
+                new_class = form.cleaned_data.get('student_class')
+                if hasattr(obj, 'userprofile'):
+                    profile = obj.userprofile
+                    profile.student_class = new_class
+                    profile.save()
             
             super().save_model(request, obj, form, change)
+            if change and obj == request.user:
+                update_session_auth_hash(request, obj)
+
+        # CASE B: Creating a NEW user
+        else:
+            if is_school_admin(request.user):
+                school = request.user.userprofile.school
+                raw_password = form.cleaned_data.get('new_password')
+                
+                # Logic to create student
+                user, final_username = self.create_student_logic(
+                    school=school,
+                    first=form.cleaned_data.get('first_name'),
+                    middle=form.cleaned_data.get('middle_name', ''),
+                    last=form.cleaned_data.get('last_name'),
+                    password=raw_password,
+                    student_class_obj=form.cleaned_data.get('student_class'),
+                    manual_username=form.cleaned_data.get('username')
+                )
+                
+                request._created_student = {
+                    'name': f"{user.first_name} {user.last_name}",
+                    'username': final_username,
+                    'password': raw_password,
+                    'school': school.name
+                }
 
     def response_add(self, request, obj, post_url_continue=None):
         if hasattr(request, '_created_student'):

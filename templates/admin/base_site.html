@@ -28,31 +28,27 @@
         padding: 2px;
         border: 1px solid #f1f5f9;
     }
+    .flex-col.min-w-0 { min-width: 140px; }
 </style>
 {% endblock %}
 
 {% block branding %}
-{# We set the color variable here in a standard HTML attribute to avoid CSS parsing errors #}
-<div class="flex items-center gap-2 py-1" 
-     style="--dynamic-color: {% if user.userprofile.school.color %}{{ user.userprofile.school.color }}{% else %}#0D7313{% endif %};">
-
-    <img src="{% static 'images/icon.png' %}" 
-         class="brand-logo-box" 
-         style="width: 28px; height: 28px;">
-
-    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+<div class="flex items-center gap-2 py-1 overflow-hidden" 
+     style="--dynamic-color: {% if user.userprofile and user.userprofile.school.color %}{{ user.userprofile.school.color }}{% else %}#0D7313{% endif %};">
     
-    {% if user.userprofile.school.icon %}
-        <img src="{{ user.userprofile.school.icon.url }}" 
+    {% if user.userprofile and user.userprofile.school.icon %}
+        <img src="{{ user.userprofile.school.icon.url }}" class="shrink-0"
              style="width: 28px; height: 28px; border-radius: 4px; object-fit: contain;">
+    {% else %}
+    <img src="{% static 'images/icon.png' %}" class="brand-logo-box shrink-0" style="width: 28px; height: 28px;">
     {% endif %}
 
-    <div class="flex flex-col justify-center text-sm ml-1">
-        <span class="school-subtitle" style="color: var(--dynamic-color) !important;">
-            {{ user.userprofile.school.name|default:"JustCBT" }}
+    <div class="flex flex-col justify-center min-w-0">
+        <span class="school-subtitle font-bold truncate" style="color: var(--dynamic-color) !important; font-size: 13px !important;">
+            {% if user.userprofile and user.userprofile.school %}{{ user.userprofile.school.name }}{% else %}JustCBT{% endif %}
         </span>
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            {{ user.userprofile.school.email|default:"Portal" }}
+        <span class="font-medium text-slate-500 uppercase tracking-tight truncate " style="color: gray !important; font-size: 9px !important;">
+            {% if user.userprofile and user.userprofile.school %}{{ user.userprofile.school.email }}{% else %}Administrator{% endif %}
         </span>
     </div>
 </div>
