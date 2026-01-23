@@ -159,7 +159,7 @@ DEFAULT_FROM_EMAIL = 'JUST CBT <versatech19@gmail.com>'
 ADMIN_EMAIL = 'olehidavis@gmail.com'
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY') 
 #FRONTEND_URL = "https://cbt-frontend-taupe.vercel.app/"
-FRONTEND_URL = "https://justcbt.com.ng/"
+FRONTEND_URL = "https://www.justcbt.com.ng/"
 LOGIN_REDIRECT_URL = '/admin/'
 
 
